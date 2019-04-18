@@ -1,20 +1,101 @@
 #include "mbed.h"
 
-//DigitalOut myled(LED1);
+//------------------------------------
+// Hyperterminal configuration
+// 9600 bauds, 8-bit data, no parity
+//------------------------------------
 
-int main() {
-    RCC->AHB1ENR|=(1<<1);
-    GPIOB->MODER&=(0x03<<(2*0));
-    GPIOB->MODER|=(0x01<<(2*0));
-    //GPIOB->ODR &= (1<<0);
-    
+/*Serial pc(SERIAL_TX, SERIAL_RX);
 
+DigitalOut myled(LED1);
+
+int main()
+{
+    int i = 1;
+    pc.printf("Hello World !\n");
     while(1) {
-        GPIOB->ODR |=(1<<0);
-//        myled = 1; // LED is ON
-        wait(0.2); // 200 ms
-        GPIOB->ODR &=~(1<<0);
-//        myled = 0; // LED is OFF
-        wait(1.0); // 1 sec
+        wait(1);
+        //pc.printf("This program runs since %d seconds.\n", i++);
+        myled = !myled;
+    }
+}*/
+
+#include "mbed.h"
+Serial pc(USBTX,USBRX);
+AnalogIn Poten(A0);
+
+// Init DAC function
+
+void init_adc(){
+     // RM page 416 : ADC_CR1 : ADC resolution
+    // Fix resolution to 12 bits 25:24 RES[1:0]: Resolution = 00: 12-bit (15 ADCCLK cycles)
+    ADC1->CR1=0x00 ;
+    // RM page 418 : ADC_CR2 : ADC enable and data alignment
+    // 1- Set ADON (bit 0) to enable the ADC 
+    // 2- Reset ALIGN (bit 11) right alignment 
+    // 3- Don’t use SWSTART (bit 30) to start conversion. This will be done later  
+    ADC1->CR2=0x01 ;     
+    // RM page 420 : ADC_SMPR2 : Sampling time conversion.
+   // Fix the sample time of the ADC over channel 0, to be equal to 3 cycles.
+    ADC1->SMPR2=0x000;  
+    // RM page 248 : APB2ENR : Clock enable
+    // Enable the clock on ADC
+    RCC->APB2ENR |=0x00000100; 
+    // RM page 428 : ADC_CCR : Clock presecaler and conversion mode
+    // Define the prescaler equal to 2 and configure independent mode
+    ADC->CCR=0x00;
+    // RM page 422 : ADC_SQR1 : Regular sequence register n°1
+    // Define 1 conversion by regular sequence
+    ADC1-> SQR1=0; 
+    // RM page 423 : ADC_SQR1 : Regular sequence register n°3
+    // Define 1 conversion by regular sequence
+    ADC1->SQR3 = 3;  
+    }
+// Conversion Function
+uint16_t getConversion()
+{
+ int temp;
+// RM page 418
+ // Start the conversion by setting bit SWSTART (bit 30) to 1
+        ADC1->CR2 |= 0x40000000; 
+// RM page 415
+ // We wait the end of the conversion by checking the EOC bit on register ADC->SR 
+   while (ADC1->SR&(1<<1) != (1<<1));
+   
+// Copy the converted result on the output register ADC1_DR
+        temp = ADC1->DR;
+        temp = temp*3300/4095;//mV
+
+    return temp;
+
+    
+}
+
+// Main Function
+int main()
+{
+int itension ;
+//int vol;
+    // RM page 180 : APB1ENR : Clock enable
+    // Enable the clock on ADC
+    RCC->AHB1ENR|=(1<<0);//RCC->AHB1ENR|=0x01;
+    // RM page 281 : GPIOA_MODER : Analog configuration
+    // Configure the 3rd pin of GPIOA in analog mode
+    GPIOA->MODER=(0x000000C0);
+    // Call of init_dac function
+    init_adc();
+    while(1) {
+        // Call of getConversion function
+        itension = getConversion();
+        // send the result to be displayed by hyper terminal
+        pc.printf("Voltage = %d mV\n\r",itension);
     }
 }
+
+
+
+
+
+
+
+
